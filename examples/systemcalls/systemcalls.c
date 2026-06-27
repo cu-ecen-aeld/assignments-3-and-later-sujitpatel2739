@@ -1,4 +1,13 @@
+// Author: sujitpatel2739
+
 #include "systemcalls.h"
+#include <stdbool.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <fcntl.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -16,8 +25,9 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
-
-    return true;
+    int status = system(cmd);
+    if(-1 == status) return false;
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
 /**
@@ -58,10 +68,21 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
-
     va_end(args);
-
-    return true;
+     
+    pid_t p_id = fork();
+    if(p_id < 0) return false;
+    
+    if(0 == p_id) {
+        execv(command[0], command);
+        _exit(EXIT_FAILURE);
+    }
+    
+    int status = 0;
+    int wait_status = waitpid(p_id, &status, 0);
+    if(-1 == wait_status) return false;
+    
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
 /**
@@ -94,6 +115,25 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 */
 
     va_end(args);
-
-    return true;
+     
+    pid_t p_id = fork();
+    if(p_id < 0) return false;
+    
+    if(0 == p_id) {
+        int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+        if (fd < 0) _exit(1);
+        
+        int dup2_status = dup2(fd, STDOUT_FILENO);
+        if(-1 == dup2_status) {close(fd); _exit(1);}
+        close(fd);
+        
+        execv(command[0], command);
+        _exit(EXIT_FAILURE);
+    }
+    
+    int status = 0;
+    int wait_status = waitpid(p_id, &status, 0);
+    if(-1 == wait_status) return false;
+    
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
